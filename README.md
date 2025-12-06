@@ -37,15 +37,14 @@ docker-compose up
 
 ---
 
-## Running Tests
+## Running Tests Locally
+
+I have provided a script that automates the testing of the project locally. 
+run the following command
 
 ### Test coverage
 ```bash
-pytest --cov=app tests/ --cov-report=term-missing
-```
-### Test with playwright
-```bash
-pytest tests/e2e/ --headed
+./test-local.sh
 ```
 
 ---
