@@ -254,7 +254,18 @@ def login_form(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
         "access_token": auth_result["access_token"],
         "token_type": "bearer"
     }
-
+# ------------------------------------------------------------------------------
+# User Update Endpoints
+# ------------------------------------------------------------------------------
+# User Profile Routes
+@app.get("/users/me", response_model=UserResponse, tags=["users"])
+def get_current_user_profile(
+    current_user=Depends(get_current_active_user)
+):
+    """
+    Get the current user's profile information.
+    """
+    return current_user
 
 # ------------------------------------------------------------------------------
 # Calculations Endpoints (BREAD)
