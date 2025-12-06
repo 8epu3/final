@@ -294,6 +294,25 @@ def update_user_profile(
     db.refresh(current_user)
     return current_user
 
+@app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["users"])
+def change_password(
+    password_update: PasswordUpdate,
+    current_user=Depends(get_current_active_user),
+    db: Session=Depends(get_db)
+):
+    """
+    Change the current user's password.
+    """
+    if not current_user.verify_password(password_update.current_password):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    
+    current_user.password = User.hash_password(password_update.new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    # Revoke current tokens (optional, but good for security)
+    # If using token blacklisting, add logic here
+    return None
+
 # ------------------------------------------------------------------------------
 # Calculations Endpoints (BREAD)
 # ------------------------------------------------------------------------------
