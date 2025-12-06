@@ -1,6 +1,7 @@
 annotated-types
 anyio
 async-timeout
+bcrypt
 certifi
 cffi
 charset-normalizer
