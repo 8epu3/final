@@ -50,13 +50,13 @@ export DATABASE_URL=postgresql://user:password@localhost:5432/mytestdb
 python -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
-pip install setuptools # Added to fix distutils error in Python 3.12+
+pip install -r requirements.txt # Now includes redis instead of aioredis
+pip install setuptools          # For distutils compatibility
 playwright install
 
 # Step 3: Run the tests
 # Unit tests
-pytest tests/unit/ --cov=app --junitxml=test-results/junit.xml # Updated --cov=src to --cov=app (project structure)
+pytest tests/unit/ --cov=app --junitxml=test-results/junit.xml
 
 # Integration tests
 pytest tests/integration/
