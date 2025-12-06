@@ -62,7 +62,7 @@ pytest tests/unit/ --cov=app --junitxml=test-results/junit.xml
 pytest tests/integration/
 
 # E2E tests
-pytest tests/e2e/
+pytest tests/e2e/ --headed
 
 # Optional: Full coverage report
 # pytest --cov=app tests/ --cov-report=term-missing
