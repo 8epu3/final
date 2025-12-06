@@ -255,7 +255,7 @@ def login_form(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
         "token_type": "bearer"
     }
 # ------------------------------------------------------------------------------
-# User Update Endpoints
+# User Profile Endpoints
 # ------------------------------------------------------------------------------
 # User Profile Routes
 @app.get("/users/me", response_model=UserResponse, tags=["users"])
@@ -265,6 +265,33 @@ def get_current_user_profile(
     """
     Get the current user's profile information.
     """
+    return current_user
+
+@app.put("/users/me", response_model=UserResponse, tags=["users"])
+def update_user_profile(
+    user_update: UserUpdate,
+    current_user=Depends(get_current_active_user),
+    db: Session=Depends(get_db)
+):
+    """
+    Update the current user's profile (username, email, first_name, last_name).
+    """
+    # Check for unique username/email if changed
+    if user_update.username and user_update.username != current_user.username:
+        if db.query(User).filter(User.username == user_update.username).first():
+            raise HTTPException(status_code=400, detail="Username already exists")
+    
+    if user_update.email and user_update.email != current_user.email:
+        if db.query(User).filter(User.email == user_update.email).first():
+            raise HTTPException(status_code=400, detail="Email already exists")
+    
+    # Update fields
+    for field, value in user_update.dict(exclude_unset=True).items():
+        setattr(current_user, field, value)
+    
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
     return current_user
 
 # ------------------------------------------------------------------------------
