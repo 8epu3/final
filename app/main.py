@@ -37,7 +37,7 @@ from app.models.calculation import Calculation  # Database model for calculation
 from app.models.user import User  # Database model for users
 from app.schemas.calculation import CalculationBase, CalculationResponse, CalculationUpdate  # API request/response schemas
 from app.schemas.token import TokenResponse  # API token schema
-from app.schemas.user import UserCreate, UserResponse, UserLogin  # User schemas
+from app.schemas.user import UserCreate, UserResponse, UserLogin, UserUpdate, PasswordUpdate # User schemas
 from app.database import Base, get_db, engine  # Database connection
 
 
