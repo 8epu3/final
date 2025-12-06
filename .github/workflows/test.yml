@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, develop ]
 
 jobs:
   test:
@@ -82,9 +82,9 @@ jobs:
   
   deploy:
     needs: security
-    if: github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref == 'refs/heads/master' && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
       
@@ -99,8 +99,9 @@ jobs:
         with:
           push: true
           tags: |
-            8epe3/final:latest
             8epe3/final:${{ github.sha }}
+            8epe3/final:${{ github.ref_name }}
+            ${{ github.ref == 'refs/heads/master' && '8epe3/final:latest' || '' }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=registry,ref=8epe3/final:cache
           cache-to: type=inline,mode=max

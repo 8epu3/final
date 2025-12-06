@@ -37,7 +37,7 @@ from app.models.calculation import Calculation  # Database model for calculation
 from app.models.user import User  # Database model for users
 from app.schemas.calculation import CalculationBase, CalculationResponse, CalculationUpdate  # API request/response schemas
 from app.schemas.token import TokenResponse  # API token schema
-from app.schemas.user import UserCreate, UserResponse, UserLogin  # User schemas
+from app.schemas.user import UserCreate, UserResponse, UserLogin, UserUpdate, PasswordUpdate # User schemas
 from app.database import Base, get_db, engine  # Database connection
 
 
@@ -254,7 +254,64 @@ def login_form(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
         "access_token": auth_result["access_token"],
         "token_type": "bearer"
     }
+# ------------------------------------------------------------------------------
+# User Profile Endpoints
+# ------------------------------------------------------------------------------
+# User Profile Routes
+@app.get("/users/me", response_model=UserResponse, tags=["users"])
+def get_current_user_profile(
+    current_user=Depends(get_current_active_user)
+):
+    """
+    Get the current user's profile information.
+    """
+    return current_user
 
+@app.put("/users/me", response_model=UserResponse, tags=["users"])
+def update_user_profile(
+    user_update: UserUpdate,
+    current_user=Depends(get_current_active_user),
+    db: Session=Depends(get_db)
+):
+    """
+    Update the current user's profile (username, email, first_name, last_name).
+    """
+    # Check for unique username/email if changed
+    if user_update.username and user_update.username != current_user.username:
+        if db.query(User).filter(User.username == user_update.username).first():
+            raise HTTPException(status_code=400, detail="Username already exists")
+    
+    if user_update.email and user_update.email != current_user.email:
+        if db.query(User).filter(User.email == user_update.email).first():
+            raise HTTPException(status_code=400, detail="Email already exists")
+    
+    # Update fields
+    for field, value in user_update.dict(exclude_unset=True).items():
+        setattr(current_user, field, value)
+    
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+@app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["users"])
+def change_password(
+    password_update: PasswordUpdate,
+    current_user=Depends(get_current_active_user),
+    db: Session=Depends(get_db)
+):
+    """
+    Change the current user's password.
+    """
+    if not current_user.verify_password(password_update.current_password):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    
+    current_user.password = User.hash_password(password_update.new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    # Revoke current tokens (optional, but good for security)
+    # If using token blacklisting, add logic here
+    return None
 
 # ------------------------------------------------------------------------------
 # Calculations Endpoints (BREAD)
