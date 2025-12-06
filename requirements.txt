@@ -37,6 +37,7 @@ pytest
 pytest-cov
 pytest-cover
 pytest-coverage
+pytest-playwright
 python-dotenv
 python-jose
 python-multipart
