@@ -42,6 +42,7 @@ python-jose
 python-multipart
 requests
 rsa
+setuptools
 six
 sniffio
 SQLAlchemy
