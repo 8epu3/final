@@ -331,24 +331,76 @@ def update_profile(
         )
 
 
-@app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["users"])
+@app.post("/profile/change-password", response_class=HTMLResponse, tags=["web"])
 def change_password(
-    password_update: PasswordUpdate,
-    current_user=Depends(get_current_active_user),
-    db: Session=Depends(get_db)
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_new_password: str = Form(...),
+    current_user: UserResponse = Depends(get_current_active_user),  # Auth here
+    db: Session = Depends(get_db)
 ):
-    """
-    Change the current user's password.
-    """
-    if not current_user.verify_password(password_update.current_password):
-        raise HTTPException(status_code=400, detail="Incorrect current password")
-    
-    current_user.password = User.hash_password(password_update.new_password)
-    current_user.updated_at = datetime.utcnow()
+    """Change user password with validation."""
+    from app.auth.jwt import verify_password, get_password_hash
+
+    print(f"Debug: Changing password for user {current_user.username}")  # Log for tracing
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate current password
+    if not verify_password(current_password, user.password):
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": "Current password is incorrect."
+            }
+        )
+
+    # Validate new password match
+    if new_password != confirm_new_password:
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": "New passwords do not match."
+            }
+        )
+
+    # Reuse existing password strength logic from schema
+    try:
+        PasswordUpdate(
+            current_password=current_password,
+            new_password=new_password,
+            confirm_new_password=confirm_new_password
+        )
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": str(e)
+            }
+        )
+
+    # Update password
+    user.password = get_password_hash(new_password)
+    user.updated_at = datetime.utcnow()
     db.commit()
-    # Revoke current tokens (optional, but good for security)
-    # If using token blacklisting, add logic here
-    return None
+
+    return templates.TemplateResponse(
+        "profile.html",
+        {
+            "request": request,
+            "user": current_user,
+            "success": "Password changed successfully! Please log in again.",
+            "require_relogin": True
+        }
+    )
 
 # ------------------------------------------------------------------------------
 # Calculations Endpoints (BREAD)
