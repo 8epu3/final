@@ -16,6 +16,7 @@ from app.database import Base, get_engine, get_sessionmaker
 from app.models.user import User
 from app.core.config import settings
 from app.database_init import init_db, drop_db
+from app.auth.jwt import get_password_hash
 
 # ======================================================================================
 # Logging Configuration
@@ -132,17 +133,50 @@ def fake_user_data() -> Dict[str, str]:
     """Provide fake user data."""
     return create_fake_user()
 
+#@pytest.fixture
+#def test_user(db_session: Session) -> User:
+#    """
+#    Create and return a single test user in the database.
+#    """
+#    user_data = create_fake_user()
+#    user = User(**user_data)
+#    db_session.add(user)
+#    db_session.commit()
+#    db_session.refresh(user)
+#    logger.info(f"Created test user ID: {user.id}")
+#    return user
+fake = Faker()
+logger = logging.getLogger(__name__)
+
+def unique_username() -> str:
+    """Return a guaranteed-unique username for the whole test session."""
+    return f"testuser_{fake.unique.hexify('^^^^^^^^', upper=False)}"
+
+def unique_email() -> str:
+    """Return a guaranteed-unique e-mail address."""
+    return f"test_{fake.unique.hexify('^^^^^^^^', upper=False)}@example.com"
 @pytest.fixture
 def test_user(db_session: Session) -> User:
     """
-    Create and return a single test user in the database.
+    Creates ONE real user per test with a properly hashed password.
+    The username and e-mail are unique across the whole test run,
+    so there is never a UNIQUE-constraint violation.
     """
-    user_data = create_fake_user()
-    user = User(**user_data)
+    user = User(
+        username=unique_username(),
+        email=unique_email(),
+        first_name="Test",
+        last_name="User",
+        password=get_password_hash("TestPass123!"),   # <-- hashed!
+        is_active=True,
+        is_verified=True,
+    )
+
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
-    logger.info(f"Created test user ID: {user.id}")
+
+    logger.info(f"Created test user → id={user.id} username={user.username}")
     return user
 
 @pytest.fixture

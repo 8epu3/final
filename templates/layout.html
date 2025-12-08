@@ -40,6 +40,7 @@
       flex-grow: 1;
     }
   </style>
+
 </head>
 
 <body class="bg-gray-100 text-gray-800 flex flex-col min-h-screen">
@@ -57,7 +58,10 @@
             <span class="text-xl font-bold text-white">Calculations App</span>
           </a>
         </div>
-  
+  <nav class="hidden md:flex space-x-6">
+  <a href="/dashboard" class="text-white hover:text-blue-200 transition-colors">Dashboard</a>
+  <a href="/profile" class="text-white hover:text-blue-200 transition-colors">Profile</a>
+</nav>
         <!-- Right side: user greeting & logout -->
         <div class="flex items-center space-x-4">
           <span id="layoutUserWelcome" class="text-sm font-medium text-white hidden md:block"></span>
@@ -230,7 +234,20 @@
     }
   });
   </script>
-
+<script>
+document.querySelectorAll('a[href="/profile"]').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetch('/profile', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? location.href = '/profile' : location.href = '/login');
+    } else {
+      location.href = '/login';
+    }
+  });
+});
+</script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

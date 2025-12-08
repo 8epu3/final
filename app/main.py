@@ -258,60 +258,154 @@ def login_form(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
 # User Profile Endpoints
 # ------------------------------------------------------------------------------
 # User Profile Routes
-@app.get("/users/me", response_model=UserResponse, tags=["users"])
-def get_current_user_profile(
-    current_user=Depends(get_current_active_user)
-):
-    """
-    Get the current user's profile information.
-    """
-    return current_user
+@app.get("/profile", response_class=HTMLResponse, tags=["web"])
+def profile_page(request: Request):
+ 
+    # Optional: Check for token in query param for debugging, but don't require it
+    token = request.query_params.get("token")
+    if token:
+        print(f"Debug: Token provided in query: {token[:20]}...")  # Log first 20 chars
+    return templates.TemplateResponse("profile.html", {"request": request})
 
-@app.put("/users/me", response_model=UserResponse, tags=["users"])
-def update_user_profile(
-    user_update: UserUpdate,
-    current_user=Depends(get_current_active_user),
-    db: Session=Depends(get_db)
-):
-    """
-    Update the current user's profile (username, email, first_name, last_name).
-    """
-    # Check for unique username/email if changed
-    if user_update.username and user_update.username != current_user.username:
-        if db.query(User).filter(User.username == user_update.username).first():
-            raise HTTPException(status_code=400, detail="Username already exists")
-    
-    if user_update.email and user_update.email != current_user.email:
-        if db.query(User).filter(User.email == user_update.email).first():
-            raise HTTPException(status_code=400, detail="Email already exists")
-    
-    # Update fields
-    for field, value in user_update.dict(exclude_unset=True).items():
-        setattr(current_user, field, value)
-    
-    current_user.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(current_user)
-    return current_user
 
-@app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["users"])
+@app.post("/profile/update", response_class=HTMLResponse, tags=["web"])
+def update_profile(
+    request: Request,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    email: str = Form(...),
+    username: str = Form(...),
+    current_user: UserResponse = Depends(get_current_active_user),  # Auth here for data access
+    db: Session = Depends(get_db)
+):
+    """Update user profile information."""
+    print(f"Debug: Updating profile for user {current_user.username}")  # Log for tracing
+    try:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check for duplicate username/email (excluding current user)
+        conflict = db.query(User).filter(
+            (User.username == username) | (User.email == email),
+            User.id != current_user.id
+        ).first()
+        if conflict:
+            conflict_field = "username" if conflict.username == username else "email"
+            return templates.TemplateResponse(
+                "profile.html",
+                {
+                    "request": request,
+                    "user": current_user,
+                    "error": f"This {conflict_field} is already taken."
+                }
+            )
+
+        user.first_name = first_name.strip()
+        user.last_name = last_name.strip()
+        user.email = email.strip().lower()
+        user.username = username.strip()
+        user.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(user)  # Refresh to get updated data
+
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": UserResponse.from_orm(user),  # Use from_orm for Pydantic v1 compat
+                "success": "Profile updated successfully!"
+            }
+        )
+    except Exception as e:
+        db.rollback()
+        print(f"Debug Error in update_profile: {str(e)}")  # Log errors
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": "Failed to update profile."
+            }
+        )
+
+
+@app.post("/profile/change-password", response_class=HTMLResponse, tags=["web"])
 def change_password(
-    password_update: PasswordUpdate,
-    current_user=Depends(get_current_active_user),
-    db: Session=Depends(get_db)
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_new_password: str = Form(...),
+    current_user: UserResponse = Depends(get_current_active_user),  # Auth here
+    db: Session = Depends(get_db)
 ):
-    """
-    Change the current user's password.
-    """
-    if not current_user.verify_password(password_update.current_password):
-        raise HTTPException(status_code=400, detail="Incorrect current password")
-    
-    current_user.password = User.hash_password(password_update.new_password)
-    current_user.updated_at = datetime.utcnow()
+    """Change user password with validation."""
+    from app.auth.jwt import verify_password, get_password_hash
+
+    print(f"Debug: Changing password for user {current_user.username}")  # Log for tracing
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate current password
+    if not verify_password(current_password, user.password):
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": "Current password is incorrect."
+            }
+        )
+
+    # Validate new password match
+    if new_password != confirm_new_password:
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": "New passwords do not match."
+            }
+        )
+
+    # Reuse existing password strength logic from schema
+    try:
+        PasswordUpdate(
+            current_password=current_password,
+            new_password=new_password,
+            confirm_new_password=confirm_new_password
+        )
+    except ValueError as e:
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": str(e)
+            }
+        )
+
+    # Update password
+    user.password = get_password_hash(new_password)
+    user.updated_at = datetime.utcnow()
     db.commit()
-    # Revoke current tokens (optional, but good for security)
-    # If using token blacklisting, add logic here
-    return None
+
+    return templates.TemplateResponse(
+        "profile.html",
+        {
+            "request": request,
+            "user": current_user,
+            "success": "Password changed successfully! Please log in again.",
+            "require_relogin": True
+        }
+    )
+
+@app.get("/auth/me", response_model=UserResponse)
+def read_current_user(current_user: UserResponse = Depends(get_current_active_user)):
+    """Return current logged-in user data for frontend."""
+    return current_user
 
 # ------------------------------------------------------------------------------
 # Calculations Endpoints (BREAD)

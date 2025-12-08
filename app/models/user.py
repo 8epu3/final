@@ -23,6 +23,7 @@ from sqlalchemy.orm import relationship
 from app.core.config import get_settings
 from app.database import Base
 from app.models.calculation import Calculation
+from sqlalchemy.orm import Session
 
 settings = get_settings()
 
@@ -291,3 +292,56 @@ class User(Base):
                 return None
         except JWTError:
             return None
+
+    def update_profile(self, update_data: dict, db: Session):
+        """
+        Update user profile information.
+        
+        Args:
+            update_data: Dictionary with fields to update (username, email, first_name, last_name)
+            db: SQLAlchemy session
+            
+        Returns:
+            User: Updated user instance
+            
+        Raises:
+            ValueError: If username or email already exists
+        """
+        if "username" in update_data and update_data["username"] != self.username:
+            existing = db.query(User).filter(User.username == update_data["username"]).first()
+            if existing:
+                raise ValueError("Username already exists")
+                
+        if "email" in update_data and update_data["email"] != self.email:
+            existing = db.query(User).filter(User.email == update_data["email"]).first()
+            if existing:
+                raise ValueError("Email already exists")
+                
+        for key, value in update_data.items():
+            if value is not None:
+                setattr(self, key, value)
+                
+        self.updated_at = utcnow()
+        db.commit()
+        db.refresh(self)
+        return self
+
+    def change_password(self, current_password: str, new_password: str, db: Session):
+        """
+        Change user's password after verifying current one.
+        
+        Args:
+            current_password: Current password to verify
+            new_password: New password to set
+            db: SQLAlchemy session
+            
+        Raises:
+            ValueError: If current password is incorrect
+        """
+        if not self.verify_password(current_password):
+            raise ValueError("Current password is incorrect")
+            
+        self.password = self.hash_password(new_password)
+        self.updated_at = utcnow()
+        db.commit()
+        db.refresh(self)
