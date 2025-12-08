@@ -258,14 +258,15 @@ def login_form(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = D
 # User Profile Endpoints
 # ------------------------------------------------------------------------------
 # User Profile Routes
-@app.get("/users/me", response_model=UserResponse, tags=["users"])
-def get_current_user_profile(
-    current_user=Depends(get_current_active_user)
-):
-    """
-    Get the current user's profile information.
-    """
-    return current_user
+@app.get("/profile", response_class=HTMLResponse, tags=["web"])
+def profile_page(request: Request):
+ 
+    # Optional: Check for token in query param for debugging, but don't require it
+    token = request.query_params.get("token")
+    if token:
+        print(f"Debug: Token provided in query: {token[:20]}...")  # Log first 20 chars
+    return templates.TemplateResponse("profile.html", {"request": request})
+
 
 @app.put("/users/me", response_model=UserResponse, tags=["users"])
 def update_user_profile(
