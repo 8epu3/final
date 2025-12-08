@@ -268,32 +268,68 @@ def profile_page(request: Request):
     return templates.TemplateResponse("profile.html", {"request": request})
 
 
-@app.put("/users/me", response_model=UserResponse, tags=["users"])
-def update_user_profile(
-    user_update: UserUpdate,
-    current_user=Depends(get_current_active_user),
-    db: Session=Depends(get_db)
+@app.post("/profile/update", response_class=HTMLResponse, tags=["web"])
+def update_profile(
+    request: Request,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    email: str = Form(...),
+    username: str = Form(...),
+    current_user: UserResponse = Depends(get_current_active_user),  # Auth here for data access
+    db: Session = Depends(get_db)
 ):
-    """
-    Update the current user's profile (username, email, first_name, last_name).
-    """
-    # Check for unique username/email if changed
-    if user_update.username and user_update.username != current_user.username:
-        if db.query(User).filter(User.username == user_update.username).first():
-            raise HTTPException(status_code=400, detail="Username already exists")
-    
-    if user_update.email and user_update.email != current_user.email:
-        if db.query(User).filter(User.email == user_update.email).first():
-            raise HTTPException(status_code=400, detail="Email already exists")
-    
-    # Update fields
-    for field, value in user_update.dict(exclude_unset=True).items():
-        setattr(current_user, field, value)
-    
-    current_user.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(current_user)
-    return current_user
+    """Update user profile information."""
+    print(f"Debug: Updating profile for user {current_user.username}")  # Log for tracing
+    try:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check for duplicate username/email (excluding current user)
+        conflict = db.query(User).filter(
+            (User.username == username) | (User.email == email),
+            User.id != current_user.id
+        ).first()
+        if conflict:
+            conflict_field = "username" if conflict.username == username else "email"
+            return templates.TemplateResponse(
+                "profile.html",
+                {
+                    "request": request,
+                    "user": current_user,
+                    "error": f"This {conflict_field} is already taken."
+                }
+            )
+
+        user.first_name = first_name.strip()
+        user.last_name = last_name.strip()
+        user.email = email.strip().lower()
+        user.username = username.strip()
+        user.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(user)  # Refresh to get updated data
+
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": UserResponse.from_orm(user),  # Use from_orm for Pydantic v1 compat
+                "success": "Profile updated successfully!"
+            }
+        )
+    except Exception as e:
+        db.rollback()
+        print(f"Debug Error in update_profile: {str(e)}")  # Log errors
+        return templates.TemplateResponse(
+            "profile.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error": "Failed to update profile."
+            }
+        )
+
 
 @app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["users"])
 def change_password(
