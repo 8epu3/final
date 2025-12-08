@@ -402,6 +402,11 @@ def change_password(
         }
     )
 
+@app.get("/auth/me", response_model=UserResponse)
+def read_current_user(current_user: UserResponse = Depends(get_current_active_user)):
+    """Return current logged-in user data for frontend."""
+    return current_user
+
 # ------------------------------------------------------------------------------
 # Calculations Endpoints (BREAD)
 # ------------------------------------------------------------------------------
